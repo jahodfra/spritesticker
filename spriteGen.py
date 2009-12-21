@@ -3,8 +3,8 @@ TODO:
     * draw repeated background ...QA
     * refactorize image merge ...OK
     * enable turning off optimalization for IE6 ...OK
-    * enable adding PilImages into stylesheet ...OK
-    * integrate PNG optimizer
+    * enable adding PIL.Images into stylesheet ...OK
+    * integrate PNG optimizer ...OK
 
     * inform gracefully about not finding image
     * implement horizontal repeat
@@ -15,7 +15,6 @@ TODO:
     * umoznit volat write vickrat po sobe
 
 Refactorization:
-    * rename image to something like SheetImage, CssImage
     * rename SpriteSheet to SpriteLayout?
 Errors:
     * merged image can have outdated position parameters
@@ -25,12 +24,15 @@ import os
 from itertools import groupby
 import tempfile
 
-from PIL import Image as PilImage
+import PIL
 from PIL import ImageColor, ImageDraw
-from packing import Rect, SmallestWidthAlgorithm
-from draw import blitSurface
 
-__all__ = ['Image', 'SpriteSheet', 'VerticalSheet', 'CssFile', 'setPngOptimizer', 'setImageFolder']
+from utils import lcm, prettySize
+from packing import SmallestWidthAlgorithm
+from draw import blitSurface
+from rect import Rect
+
+__all__ = ['SheetImage', 'SpriteSheet', 'VerticalSheet', 'CssWriter', 'setPngOptimizer', 'setImageFolder']
 
 pngOptimizer = ''
 imageFolder = ''
@@ -47,10 +49,8 @@ def setImageFolder(path):
     global imageFolder
     imageFolder = path
 
-class CssFile:
-    def __init__(self, filename, pathPrefix=''):
-        self.filename = filename
-        self.pathPrefix = pathPrefix
+class CssWriter:
+    def __init__(self):
         self.selectorToImage = {}
 
     def extend(self, spriteSheet):
@@ -60,8 +60,10 @@ class CssFile:
     def add(self, selector, image):
         self.selectorToImage[selector] = image
             
-    def write(self):
-        fout = file(self.filename, 'w')
+    def write(self, filename, pathPrefix=''):
+        self.pathPrefix = pathPrefix
+
+        fout = file(filename, 'w')
         for selector, image in self.selectorToImage.items():
             self._writeImageCss(fout, selector, image)
         fout.close()
@@ -75,7 +77,7 @@ class CssFile:
 
 TOP, RIGHT, BOTTOM, LEFT = range(4)
 
-class Image:
+class SheetImage:
     '''
     attributes:
         pos - shifting image in pixels from topleft corner of image (not including margin).
@@ -101,14 +103,14 @@ class Image:
         '''
             image can be filename or PIL.Image object
         '''
-        if isinstance(image, PilImage.Image):
+        if isinstance(image, PIL.Image.Image):
             self.filename = ''
             self.path = ''
             self._image = image
         elif isinstance(image, (str, unicode)):
             self.filename = image
             self.path = os.path.join(imageFolder, self.filename)
-            self._image = PilImage.open(self.path)
+            self._image = PIL.Image.open(self.path)
         else:
             raise ValueError('unsupported value for image')
         self.margin = margin
@@ -117,7 +119,16 @@ class Image:
         self.pos = pos
         self.color = color
         self.background = background
+        self.selector = ''
         self.repeat = repeat
+
+    def setBackground(self, image):
+        self.background = image
+        return self
+
+    def setSelector(self, selector):
+        self.selector = selector
+        return self
 
     def canBeMergedWith(self, image):
         return self.filename and self.filename == image.filename and self.repeat == image.repeat and \
@@ -176,20 +187,18 @@ class BaseSpriteSheet:
         self.size = 0, 0
         self.images = []
         self.placedImages = []
-        self.selectorToImage = {}
 
-        images = images or {}
-        for selector, image in images.items():
-            self.add(selector, image)
+        images = images or []
+        for image in images:
+            self.add(image)
 
-    def add(self, selector, image):
+    def add(self, image):
         'add a image for appopriate CSS selector into container'
         image.repeat = self.repeat
-        self.selectorToImage[selector] = image
         self.images.append(image)
 
     def getStyles(self):
-        return self.selectorToImage.items()
+        return [(im.selector, im) for im in self.images if im.selector]
                 
     def getSpriteSheetPath(self):
         return os.path.join(imageFolder, self.name + '.png')
@@ -244,7 +253,7 @@ class BaseSpriteSheet:
             for im in self.images:
                 im.background = None
 
-        sheet = PilImage.new(self.mode, self.size, self.matteColor)
+        sheet = PIL.Image.new(self.mode, self.size, self.matteColor)
 
         for image, rect in self.placedImages:
             image.drawInto(sheet, rect)
@@ -286,15 +295,6 @@ class BaseSpriteSheet:
             print '  spritesheet filesize: %s' % prettySize(newsize)
         print '  requests saved %d' % (nImages - 1)
 
-def prettySize(size):
-    'from http://snippets.dzone.com/posts/show/5434'
-    suffixes = [("B",2**10), ("K",2**20), ("M",2**30), ("G",2**40), ("T",2**50)]
-    for suf, lim in suffixes:
-        if size > lim:
-            continue
-        else:
-            return round(size/float(lim/2**10),2).__str__()+suf
-
 class SpriteSheet(BaseSpriteSheet):
     repeat = 'no-repeat'
 
@@ -303,26 +303,13 @@ class SpriteSheet(BaseSpriteSheet):
         rects = alg.compute()
         self.size = alg.size
 
-def gcd(x, y):
-    while True:
-        if y > x:
-            y, x = x, y
-        d, r = x / y, x % y
-        if r == 0:
-            return y
-        x, y = d, r
-
-def lcm(x, y):
-    d = gcd(x, y)
-    return (x / d) * y
-
 class VerticalSheet(BaseSpriteSheet):
     repeat = 'repeat-x'
 
-    def add(self, selector, image):
+    def add(self, image):
         if image.margin[LEFT] != 0 or image.margin[RIGHT] != 0:
             raise ValueError('x repeated images cannot have left or right margin')
-        BaseSpriteSheet.add(self, selector, image)
+        BaseSpriteSheet.add(self, image)
 
     def _placeRects(self, rects):
         width = reduce(lcm, [rect.width for rect in rects])
