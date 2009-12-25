@@ -10,7 +10,6 @@ TODO:
     * implement horizontal repeat
     * write setup.py for integration into python site-packages
     * enable adding images to corners and centers / 3x3 container
-    * ensure that repeat images are not placed into bad containers
     * enable generating markup blocks
     * umoznit volat write vickrat po sobe
 
@@ -195,7 +194,8 @@ class BaseSpriteSheet:
 
     def add(self, image):
         'add a image for appopriate CSS selector into container'
-        image.repeat = self.repeat
+        if image.repeat != self.repeat:
+            raise ValueError('%st can contain only %s images' % (self.__class__.__name__, self.repeat))
         self.images.append(image)
 
     def getStyles(self):
@@ -298,7 +298,7 @@ class BaseSpriteSheet:
 
 class SpriteSheet(BaseSpriteSheet):
     repeat = 'no-repeat'
-
+    
     def _placeRects(self, rects):
         alg = SmallestWidthAlgorithm(rects)
         rects = alg.compute()
@@ -315,6 +315,8 @@ class VerticalSheet(BaseSpriteSheet):
 
     def _placeRects(self, rects):
         width = reduce(lcm, [rect.width for rect in rects])
+        if width > 5000:
+            raise ValueError('generated image will have width %dpx, check inputs' % width)
         height = 0
         for rect in rects:
             rect.topleft = 0, height
