@@ -1,4 +1,6 @@
-from spriteGen import *
+#!/usr/bin/env python
+
+from spritesticker import *
 
 imageUrlPrefix = 'Images'
 imageFolder = r'test/Images'
