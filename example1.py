@@ -9,11 +9,11 @@ setImageFolder('test/Images')
 bagLayout = [
     SheetImage('footer-logo.png') 
         .setSelector('.img-footer-logo') 
-        .setBackground(SheetImage('footer-bg.png', pos=(0, -20), repeat='repeat-x')),
+        .setBackground(SheetImage('footer-bg.png', pos=(0, -20))),
 ]
 
 verticalLayout = [
-    SheetImage('heading-bg.png', pos=(0, 15), margin=(20, 0, 20, 0), color='white') 
+    SheetImage('heading-bg.png', pos=(0, 15), margin=(20, 0, 20, 0), color='white', repeat='repeat-x') 
         .setSelector('.img-heading-bg'),
 ]
 

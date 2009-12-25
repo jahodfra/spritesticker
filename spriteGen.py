@@ -1,25 +1,36 @@
 '''
-TODO:
-    * draw repeated background ...QA
-    * refactorize image merge ...OK
-    * enable turning off optimalization for IE6 ...OK
-    * enable adding PIL.Images into stylesheet ...OK
-    * integrate PNG optimizer ...OK
+FEATURES
+    * multiple used images are placed into spritesheet only oncere
+    * images can have image background
+    * optional optimalization for IE6 (transparency issues)
+    * on the fly generated PIL.Images can be added into spritesheet
+    * integrated PNG optimizer
 
+TODO:
+    * testy
+        * test repeat images
+            * image generation
+            * css generation
+            * no images added
+            * bad image type added
+        * test no-repat images
+            * image generation
+            * css generation
+            * no images added
+            * bad image type added
+        * testPacking (not overlapping, preserving size)
     * inform gracefully about not finding image
     * implement horizontal repeat
     * write setup.py for integration into python site-packages
     * enable adding images to corners and centers / 3x3 container
     * enable generating markup blocks
-    * umoznit volat write vickrat po sobe
 
 Refactorization:
-    * rename SpriteSheet to SpriteLayout?
-Errors:
-    * merged image can have outdated position parameters
+    * divide SpriteSheet to SpriteSheet and SpriteLayout?
 '''
 
 import os
+from copy import copy
 from itertools import groupby
 import tempfile
 
@@ -53,8 +64,9 @@ class CssWriter:
         self.selectorToImage = {}
 
     def extend(self, spriteSheet):
-        for selector, image in spriteSheet.getStyles():
-            self.add(selector, image)
+        for image in spriteSheet.transformedImages():
+            if image.selector:
+                self.add(image.selector, image)
 
     def add(self, selector, image):
         self.selectorToImage[selector] = image
@@ -130,15 +142,13 @@ class SheetImage:
         return self
 
     def canBeMergedWith(self, image):
+        '''transitive, reflexive, symetric relation'''
         return self.filename and self.filename == image.filename and self.repeat == image.repeat and \
         self.color == image.color and self.background is image.background
 
     def mergeWith(self, image):
         '''two images with same filename can be merged together (one transformed to the other)
         '''
-        if self is image:
-            return
-        print 'merging', self.filname, image.filename
         self.margin = [max(self.margin[i], image.margin[i]) for i in xrange(4)]
         image.margin = self.margin
 
@@ -171,7 +181,7 @@ class SheetImage:
                rect.top + self.margin[TOP] + self.pos[1])
 
         blitSurface(self._image, pos, surface, rect, repeatX, repeatY)
-        
+
 class BaseSpriteSheet:
     def __init__(self, name, images=None, matteColor=None, drawBackgrounds=True, mode='RGBA'):
         self.name = name
@@ -180,26 +190,28 @@ class BaseSpriteSheet:
             self.matteColor = ImageColor.getrgb(matteColor)
         else:
             self.matteColor = (255, 255, 255, 0)
-
         self.drawBackgrounds = drawBackgrounds
-
         self.size = 0, 0
         self.images = []
-        self.placedImages = []
+        self.imagePlacement = []
         self.fillCoef = 0
 
-        images = images or []
-        for image in images:
-            self.add(image)
+        self.extend(images)
 
     def add(self, image):
         'add a image for appopriate CSS selector into container'
         if image.repeat != self.repeat:
-            raise ValueError('%st can contain only %s images' % (self.__class__.__name__, self.repeat))
+            raise ValueError('%s can contain only %s images' % (self.__class__.__name__, self.repeat))
         self.images.append(image)
 
-    def getStyles(self):
-        return [(im.selector, im) for im in self.images if im.selector]
+    def extend(self, images):
+        for image in images:
+            self.add(image)
+
+    def transformedImages(self):
+        for rect, images in self.imagePlacement:
+            for im in images:
+                yield im
                 
     def getSpriteSheetPath(self):
         return os.path.join(imageFolder, self._getFilename())
@@ -207,59 +219,51 @@ class BaseSpriteSheet:
     def getSpriteSheetFilename(self):
         return self.name + '.png'
 
-    def _uniqueImages(self, group):
-        group = list(group)
-        while group:
-            imageA = group.pop()
-            newGroup = []
-            for imageB in group:
-                if imageA.canBeMergedWith(imageB):
-                    imageA.mergeWith(imageB)
+    def _groupSame(self, images):
+        images = list(images)
+        while images:
+            imageA = images.pop()
+            group = [imageA]
+            newImages = []
+            for imageB in images:
+                if imageA is not imageB and imageA.canBeMergedWith(imageB):
+                    group.append(imageB)
                 else:
-                    newGroup.append(imageB)
-            group = newGroup
-            yield imageA
+                    newImages.append(imageB)
+            images = newImages
+            yield imageA, group
 
-    def _getMergedImages(self):
-        fn = lambda image: image.filename
-        images = self.images[:]
+    def _initStartupPlacement(self):
+        fn = lambda image: (image.filename, image.color, image.repeat)
+        images = [copy(im) for im in self.images]
         images.sort(key=fn)
 
-        uniqueImages = [image
-            for filename, group in groupby(images, key=fn)
-            for image in self._uniqueImages(group)
-        ]
-        return uniqueImages
-
-    def _getStartupConfiguration(self):
-        unplacedImages = []
-        for image in self._getMergedImages():
-            rect = image.getOuterRect()
-            unplacedImages.append((image, rect))
-        return unplacedImages
+        self.imagePlacement = []
+        for filename, group in groupby(images, key=fn):
+            for pivot, groupedImages in self._groupSame(group):
+                for im in groupedImages:
+                    if im is not pivot:
+                        pivot.mergeWith(im)
+                self.imagePlacement.append((pivot.getOuterRect(), groupedImages))
 
     def _placeImages(self):
-        unplacedImages = self._getStartupConfiguration()
-        rects = map(lambda item: item[1], unplacedImages)
-        self._placeRects(rects)
-        self.placedImages = unplacedImages
-
-    def _placeRects(self, rects):
         raise NotImplementedError('this method is shold be overriden in the offsprings')
 
-    def write(self): self._placeImages()
-
-        if self.drawBackgrounds:
+    def write(self):
+        self._initStartupPlacement()
+        self._placeImages()
+        if not self.drawBackgrounds:
             for im in self.images:
                 im.background = None
-
         sheet = PIL.Image.new(self.mode, self.size, self.matteColor)
 
-        for image, rect in self.placedImages:
+        for rect, group in self.imagePlacement:
+            image = group[0]
             image.drawInto(sheet, rect)
-            image.setOuterPos(rect.topleft)
-            image.filename = self._getFilename()
-            image._image = sheet
+            for im in group:
+                im.setOuterPos(rect.topleft)
+                im.filename = self._getFilename()
+                im._image = sheet
 
         self.saveFile(sheet)
         self.printInfo()
@@ -278,32 +282,40 @@ class BaseSpriteSheet:
             sheet.save(path, optimize=True)
 
     def printInfo(self):
-        nImages = len(self.placedImages)
-        newsize = os.path.getsize(self.getSpriteSheetPath())
-        if all(image.path != '' for image, rect in self.placedImages):
-            origsize = sum(os.path.getsize(image.path) for image, rect in self.placedImages)
-            sizeCoef = float(newsize) / origsize * 100.0
-        else:
-            origsize = -1
+        self._printBaseInfo()
+        self._printSizeInfo()
 
+    def _printBaseInfo(self):
+        nImages = len(self.imagePlacement)
         print 'generating %s containing %d images' % (self._getFilename(), nImages)
         print '  dimension %d x %dpx' % self.size
-        print '  filling coeficient is %.2f%%' % (fillCoef * 100.0)
-        if origsize > 0:
+        print '  requests saved %d' % (nImages - 1)
+    
+    def _printSizeInfo(self):
+        placedImages = [images[0] for rect, images in self.imagePlacement]
+        newsize = os.path.getsize(self.getSpriteSheetPath())
+        if all(image.path != '' for image in placedImages):
+            origsize = sum(os.path.getsize(image.path) for image in placedImages)
+            sizeCoef = float(newsize) / origsize * 100.0
             print '  original images filesize: %s' % prettySize(origsize)
             print '  spritesheet filesize: %s (%.2f%%)' % (prettySize(newsize), sizeCoef)
         else:
             print '  spritesheet filesize: %s' % prettySize(newsize)
-        print '  requests saved %d' % (nImages - 1)
 
 class SpriteSheet(BaseSpriteSheet):
     repeat = 'no-repeat'
+
+    def printInfo(self):
+        self._printBaseInfo()
+        print '  filling coeficient is %.2f%%' % (self.fillCoef * 100.0)
+        self._printSizeInfo()
     
-    def _placeRects(self, rects):
+    def _placeImages(self):
+        rects = [rect for rect, group in self.imagePlacement]
         alg = SmallestWidthAlgorithm(rects)
         rects = alg.compute()
         self.size = alg.size
-        self.fillCoef = alg.fillCoef
+        self.fillCoef = alg.fillingCoef
 
 class VerticalSheet(BaseSpriteSheet):
     repeat = 'repeat-x'
@@ -313,7 +325,8 @@ class VerticalSheet(BaseSpriteSheet):
             raise ValueError('x repeated images cannot have left or right margin')
         BaseSpriteSheet.add(self, image)
 
-    def _placeRects(self, rects):
+    def _placeImages(self):
+        rects = [rect for rect, group in self.imagePlacement]
         width = reduce(lcm, [rect.width for rect in rects])
         if width > 5000:
             raise ValueError('generated image will have width %dpx, check inputs' % width)
