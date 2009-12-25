@@ -201,7 +201,7 @@ class BaseSpriteSheet:
         return [(im.selector, im) for im in self.images if im.selector]
                 
     def getSpriteSheetPath(self):
-        return os.path.join(imageFolder, self.name + '.png')
+        return os.path.join(imageFolder, self._getFilename())
 
     def getSpriteSheetFilename(self):
         return self.name + '.png'
@@ -246,8 +246,7 @@ class BaseSpriteSheet:
     def _placeRects(self, rects):
         raise NotImplementedError('this method is shold be overriden in the offsprings')
 
-    def write(self):
-        self._placeImages()
+    def write(self): self._placeImages()
 
         if self.drawBackgrounds:
             for im in self.images:
@@ -258,11 +257,14 @@ class BaseSpriteSheet:
         for image, rect in self.placedImages:
             image.drawInto(sheet, rect)
             image.setOuterPos(rect.topleft)
-            image.filename = self.name + '.png'
+            image.filename = self._getFilename()
             image._image = sheet
 
         self.saveFile(sheet)
         self.printInfo()
+
+    def _getFilename(self):
+        return self.name + '.png'
 
     def saveFile(self, sheet):
         path = self.getSpriteSheetPath()
@@ -285,7 +287,7 @@ class BaseSpriteSheet:
         else:
             origsize = -1
 
-        print 'generating %s containing %d images' % (self.name + '.pdf', nImages)
+        print 'generating %s containing %d images' % (self._getFilename(), nImages)
         print '  dimension %d x %dpx' % self.size
         print '  filling coeficient is %.2f%%' % (fillCoef * 100.0)
         if origsize > 0:
