@@ -187,6 +187,7 @@ class BaseSpriteSheet:
         self.size = 0, 0
         self.images = []
         self.placedImages = []
+        self.fillCoef = 0
 
         images = images or []
         for image in images:
@@ -277,8 +278,6 @@ class BaseSpriteSheet:
             sheet.save(path, optimize=True)
 
     def printInfo(self):
-        sheetArea = self.size[0] * self.size[1]
-        fillCoef = sum(rect.width * rect.height for image, rect in self.placedImages) / float(sheetArea)
         nImages = len(self.placedImages)
         newsize = os.path.getsize(self.getSpriteSheetPath())
         if all(image.path != '' for image, rect in self.placedImages):
@@ -304,6 +303,7 @@ class SpriteSheet(BaseSpriteSheet):
         alg = SmallestWidthAlgorithm(rects)
         rects = alg.compute()
         self.size = alg.size
+        self.fillCoef = alg.fillCoef
 
 class VerticalSheet(BaseSpriteSheet):
     repeat = 'repeat-x'

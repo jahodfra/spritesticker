@@ -24,6 +24,11 @@ class PackingAlgorithm:
         '''minArea >= minWidth * minHeight'''
         return sum(rect.area for rect in self.rects)
 
+    @property
+    def fillingCoef(self):
+        sheetArea = self.size[0] * self.size[1]
+        return sum(rect.width * rect.height for rect in self.rects) / float(sheetArea)
+
     def transpose(self):
         'transpose problem, it can be usefull for some positioning strategies'
         for rect in self.rects:
