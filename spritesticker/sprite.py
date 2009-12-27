@@ -1,34 +1,3 @@
-'''
-FEATURES
-    * multiple used images are placed into spritesheet only oncere
-    * images can have image background
-    * optional optimalization for IE6 (transparency issues)
-    * on the fly generated PIL.Images can be added into spritesheet
-    * integrated PNG optimizer
-
-TODO:
-    * testy
-        * test repeat images
-            * image generation
-            * css generation
-            * no images added
-            * bad image type added
-        * test no-repat images
-            * image generation
-            * css generation
-            * no images added
-            * bad image type added
-        * testPacking (not overlapping, preserving size)
-    * inform gracefully about not finding image
-    * implement horizontal repeat
-    * write setup.py for integration into python site-packages
-    * enable adding images to corners and centers / 3x3 container
-    * enable generating markup blocks
-
-Refactorization:
-    * divide SpriteSheet to SpriteSheet and SpriteLayout?
-'''
-
 import os
 from copy import copy
 from itertools import groupby
@@ -42,7 +11,7 @@ from packing import SmallestWidthAlgorithm
 from draw import blitSurface
 from rect import Rect
 
-__all__ = ['SheetImage', 'SpriteSheet', 'VerticalSheet', 'CssWriter', 'setPngOptimizer', 'setImageFolder']
+__all__ = ['SheetImage', 'SpriteSheet', 'BoxLayout', 'RepeatXLayout', 'CssWriter', 'setPngOptimizer', 'setImageFolder']
 
 pngOptimizer = ''
 imageFolder = ''
@@ -64,7 +33,7 @@ class CssWriter:
         self.selectorToImage = {}
 
     def extend(self, spriteSheet):
-        for image in spriteSheet.transformedImages():
+        for image in spriteSheet.transformedImages:
             if image.selector:
                 self.add(image.selector, image)
 
@@ -182,21 +151,54 @@ class SheetImage:
 
         blitSurface(self._image, pos, surface, rect, repeatX, repeatY)
 
-class BaseSpriteSheet:
-    def __init__(self, name, images=None, matteColor=None, drawBackgrounds=True, mode='RGBA'):
-        self.name = name
-        self.mode = mode
-        if matteColor:
-            self.matteColor = ImageColor.getrgb(matteColor)
-        else:
-            self.matteColor = (255, 255, 255, 0)
-        self.drawBackgrounds = drawBackgrounds
+def mergeImages(images):
+    def extractImageFromGroup(imageA, images):
+        group = [imageA]
+        newImages = []
+        for imageB in images:
+            if imageA is not imageB and imageA.canBeMergedWith(imageB):
+                group.append(imageB)
+            else:
+                newImages.append(imageB)
+        return group, newImages
+
+    def groupSameImages(images):
+        images = list(images)
+        while images:
+            imageA = images.pop()
+            group, images = extractImageFromGroup(imageA, images)
+            yield imageA, group
+
+    fn = lambda image: (image.filename, image.color, image.repeat)
+    images = [copy(im) for im in images]
+    images.sort(key=fn)
+
+    imageGroups = []
+    for filename, group in groupby(images, key=fn):
+        for pivot, groupedImages in groupSameImages(group):                
+            for im in groupedImages:
+                if im is not pivot:
+                    pivot.mergeWith(im)
+                imageGroups.append(groupedImages)
+    return imageGroups
+
+class SpriteLayout(object):
+    def __init__(self, images):
         self.size = 0, 0
         self.images = []
-        self.imagePlacement = []
+        self.imageGroups = []
+        self.imagePositions = []
         self.fillCoef = 0
-
         self.extend(images)
+
+    def _initStartupPlacement(self):
+        self.imageGroups = mergeImages(self.images)
+        self.imagePositions = []
+        for group in self.imageGroups:
+            self.imagePositions.append(group[0].getOuterRect())
+
+    def placeImages(self):
+        raise NotImplementedError('this method is shold be overriden in the offsprings')
 
     def add(self, image):
         'add a image for appopriate CSS selector into container'
@@ -208,125 +210,42 @@ class BaseSpriteSheet:
         for image in images:
             self.add(image)
 
-    def transformedImages(self):
-        for rect, images in self.imagePlacement:
+    @property
+    def placedImages(self):
+        for i, images in enumerate(self.imageGroups):
             for im in images:
-                yield im
-                
-    def getSpriteSheetPath(self):
-        return os.path.join(imageFolder, self._getFilename())
+                yield im, self.imagePositions[i]
 
-    def getSpriteSheetFilename(self):
-        return self.name + '.png'
+    @property
+    def placedUniqueImages(self):
+        for i, images in enumerate(self.imageGroups):
+            yield images[0], self.imagePositions[i]
 
-    def _groupSame(self, images):
-        images = list(images)
-        while images:
-            imageA = images.pop()
-            group = [imageA]
-            newImages = []
-            for imageB in images:
-                if imageA is not imageB and imageA.canBeMergedWith(imageB):
-                    group.append(imageB)
-                else:
-                    newImages.append(imageB)
-            images = newImages
-            yield imageA, group
+    @property
+    def uniqueImagesCount(self):
+        return len(self.imageGroups)
 
-    def _initStartupPlacement(self):
-        fn = lambda image: (image.filename, image.color, image.repeat)
-        images = [copy(im) for im in self.images]
-        images.sort(key=fn)
-
-        self.imagePlacement = []
-        for filename, group in groupby(images, key=fn):
-            for pivot, groupedImages in self._groupSame(group):
-                for im in groupedImages:
-                    if im is not pivot:
-                        pivot.mergeWith(im)
-                self.imagePlacement.append((pivot.getOuterRect(), groupedImages))
-
-    def _placeImages(self):
-        raise NotImplementedError('this method is shold be overriden in the offsprings')
-
-    def write(self):
-        self._initStartupPlacement()
-        self._placeImages()
-        if not self.drawBackgrounds:
-            for im in self.images:
-                im.background = None
-        sheet = PIL.Image.new(self.mode, self.size, self.matteColor)
-
-        for rect, group in self.imagePlacement:
-            image = group[0]
-            image.drawInto(sheet, rect)
-            for im in group:
-                im.setOuterPos(rect.topleft)
-                im.filename = self._getFilename()
-                im._image = sheet
-
-        self.saveFile(sheet)
-        self.printInfo()
-
-    def _getFilename(self):
-        return self.name + '.png'
-
-    def saveFile(self, sheet):
-        path = self.getSpriteSheetPath()
-        if pngOptimizer:
-            tmpfile = tempfile.NamedTemporaryFile(suffix='png').name
-            sheet.save(tmpfile, 'PNG')
-            os.system(pngOptimizer % (tmpfile, path))
-            os.remove(tmpfile)
-        else:
-            sheet.save(path, optimize=True)
-
-    def printInfo(self):
-        self._printBaseInfo()
-        self._printSizeInfo()
-
-    def _printBaseInfo(self):
-        nImages = len(self.imagePlacement)
-        print 'generating %s containing %d images' % (self._getFilename(), nImages)
-        print '  dimension %d x %dpx' % self.size
-        print '  requests saved %d' % (nImages - 1)
-    
-    def _printSizeInfo(self):
-        placedImages = [images[0] for rect, images in self.imagePlacement]
-        newsize = os.path.getsize(self.getSpriteSheetPath())
-        if all(image.path != '' for image in placedImages):
-            origsize = sum(os.path.getsize(image.path) for image in placedImages)
-            sizeCoef = float(newsize) / origsize * 100.0
-            print '  original images filesize: %s' % prettySize(origsize)
-            print '  spritesheet filesize: %s (%.2f%%)' % (prettySize(newsize), sizeCoef)
-        else:
-            print '  spritesheet filesize: %s' % prettySize(newsize)
-
-class SpriteSheet(BaseSpriteSheet):
+class BoxLayout(SpriteLayout):
     repeat = 'no-repeat'
 
-    def printInfo(self):
-        self._printBaseInfo()
-        print '  filling coeficient is %.2f%%' % (self.fillCoef * 100.0)
-        self._printSizeInfo()
-    
-    def _placeImages(self):
-        rects = [rect for rect, group in self.imagePlacement]
-        alg = SmallestWidthAlgorithm(rects)
-        rects = alg.compute()
+    def placeImages(self):    
+        self._initStartupPlacement()
+        alg = SmallestWidthAlgorithm(self.imagePositions)
+        alg.compute()
         self.size = alg.size
         self.fillCoef = alg.fillingCoef
-
-class VerticalSheet(BaseSpriteSheet):
+        
+class RepeatXLayout(SpriteLayout):
     repeat = 'repeat-x'
 
     def add(self, image):
         if image.margin[LEFT] != 0 or image.margin[RIGHT] != 0:
             raise ValueError('x repeated images cannot have left or right margin')
-        BaseSpriteSheet.add(self, image)
+        super(RepeatXLayout, self).add(image)
 
-    def _placeImages(self):
-        rects = [rect for rect, group in self.imagePlacement]
+    def placeImages(self):
+        self._initStartupPlacement()
+        rects = self.imagePositions
         width = reduce(lcm, [rect.width for rect in rects])
         if width > 5000:
             raise ValueError('generated image will have width %dpx, check inputs' % width)
@@ -336,4 +255,73 @@ class VerticalSheet(BaseSpriteSheet):
             height += rect.height
             rect.width = width
         self.size = width, height
+
+
+class SpriteSheet:
+    def __init__(self, name, layout, matteColor=None, drawBackgrounds=True, mode='RGBA'):
+        self.name = name
+        self.mode = mode
+        if matteColor:
+            self.matteColor = ImageColor.getrgb(matteColor)
+        else:
+            self.matteColor = (255, 255, 255, 0)
+        self.drawBackgrounds = drawBackgrounds
+        self.layout = layout
+
+    def getSpriteSheetPath(self):
+        return os.path.join(imageFolder, self.getSpriteSheetFilename())
+    
+    def getSpriteSheetFilename(self):
+        return self.name + '.png'
+
+    def write(self):
+        self.layout.placeImages()
+        sheet = PIL.Image.new(self.mode, self.layout.size, self.matteColor)
+
+        for im, rect in self.layout.placedUniqueImages:
+            if not self.drawBackgrounds:
+                im.background = None
+            im.drawInto(sheet, rect)
+
+        self._saveFile(sheet)
+        self._printInfo()
+
+    def _saveFile(self, sheet):
+        path = self.getSpriteSheetPath()
+        if pngOptimizer:
+            tmpfile = tempfile.NamedTemporaryFile(suffix='png').name
+            sheet.save(tmpfile, 'PNG')
+            os.system(pngOptimizer % (tmpfile, path))
+            os.remove(tmpfile)
+        else:
+            sheet.save(path, optimize=True)
+    
+    @property
+    def transformedImages(self):
+        for image, rect in self.layout.placedImages:
+            image.setOuterPos(rect.topleft)
+            image.filename = self.getSpriteSheetFilename()
+            yield image
+
+    def _printInfo(self):
+        self._printBaseInfo()
+        self._printSizeInfo()
+
+    def _printBaseInfo(self):
+        nImages = self.layout.uniqueImagesCount
+        print 'generating %s containing %d images' % (self.getSpriteSheetFilename(), nImages)
+        print '  dimension %d x %dpx' % self.layout.size
+        print '  requests saved %d' % (nImages - 1)
+        print '  filling coeficient is %.2f%%' % (self.layout.fillCoef * 100.0)
+    
+    def _printSizeInfo(self):
+        placedImages = list(self.layout.placedUniqueImages)
+        newsize = os.path.getsize(self.getSpriteSheetPath())
+        if all(image.path != '' for image, rect in placedImages):
+            origsize = sum(os.path.getsize(image.path) for image, rect in placedImages)
+            sizeCoef = float(newsize) / origsize * 100.0
+            print '  original images filesize: %s' % prettySize(origsize)
+            print '  spritesheet filesize: %s (%.2f%%)' % (prettySize(newsize), sizeCoef)
+        else:
+            print '  spritesheet filesize: %s' % prettySize(newsize)
 
