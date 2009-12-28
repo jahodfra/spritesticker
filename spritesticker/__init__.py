@@ -23,9 +23,14 @@ TODO:
     * enable adding images to corners and centers / 3x3 container
     * enable generating markup blocks
     * polish documentation + examples
-
-Refactorization:
-    * divide SpriteSheet to SpriteSheet and SpriteLayout
 '''
 
-from sprite import *
+from sprite import (SpriteSheet,
+                    SheetImage,
+                    CssWriter,
+                    setPngOptimizer,
+                    setImageFolder)
+
+from layouts import (SpriteLayout,
+                     RepeatXLayout,
+                     BoxLayout)

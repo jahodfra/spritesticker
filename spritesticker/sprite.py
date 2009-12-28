@@ -1,17 +1,15 @@
+import new
 import os
-from copy import copy
-from itertools import groupby
 import tempfile
 
 import PIL
 from PIL import ImageColor, ImageDraw
 
-from utils import lcm, prettySize
-from packing import SmallestWidthAlgorithm
+from utils import prettySize
 from draw import blitSurface
 from rect import Rect
 
-__all__ = ['SheetImage', 'SpriteSheet', 'BoxLayout', 'RepeatXLayout', 'CssWriter', 'setPngOptimizer', 'setImageFolder']
+__all__ = ['SheetImage', 'SpriteSheet', 'CssWriter', 'setPngOptimizer', 'setImageFolder']
 
 pngOptimizer = ''
 imageFolder = ''
@@ -54,8 +52,6 @@ class CssWriter:
         color = image.color or ''
         pos = '%dpx %dpx' % image.pos
         fout.write('%(selector)s {background: %(color)s url(%(imagePath)s) %(repeat)s %(pos)s;}\n' % locals())
-
-TOP, RIGHT, BOTTOM, LEFT = range(4)
 
 class SheetImage:
     '''
@@ -102,6 +98,18 @@ class SheetImage:
         self.selector = ''
         self.repeat = repeat
 
+    @property
+    def leftMargin(self):
+        return margin[self.LEFT]
+    
+    @property
+    def rightMargin(self):
+        return margin[self.RIGHT]
+
+    @property
+    def rightMargin(self):
+        return margin[self.RIGHT]
+
     def setBackground(self, image):
         self.background = image
         return self
@@ -122,13 +130,13 @@ class SheetImage:
         image.margin = self.margin
 
     def setOuterPos(self, pos):
-        self.pos = (self.pos[0] - pos[0] - self.margin[LEFT],
-                    self.pos[1] - pos[1] - self.margin[TOP])
+        self.pos = (self.pos[0] - pos[0] - self.marginLeft,
+                    self.pos[1] - pos[1] - self.marginTop)
 
     def getOuterRect(self):
         r = Rect()
-        r.size = (self.margin[LEFT] + self._image.size[0] + self.margin[RIGHT],
-                  self.margin[TOP] + self._image.size[1] + self.margin[BOTTOM])
+        r.size = (self.marginLeft + self._image.size[0] + self.marginRight,
+                  self.marginTop + self._image.size[1] + self.marginBottom)
         return r
 
     def _pasteColor(self, sheet, rect):
@@ -146,117 +154,14 @@ class SheetImage:
         self._pasteBackground(surface, rect)
 
         repeatX, repeatY = self._repeatDict[self.repeat]
-        pos = (rect.left + self.margin[LEFT] + self.pos[0],
-               rect.top + self.margin[TOP] + self.pos[1])
+        pos = (rect.left + self.marginLeft + self.pos[0],
+               rect.top + self.marginTop + self.pos[1])
 
         blitSurface(self._image, pos, surface, rect, repeatX, repeatY)
 
-def mergeImages(images):
-    def extractImageFromGroup(imageA, images):
-        group = [imageA]
-        newImages = []
-        for imageB in images:
-            if imageA is not imageB and imageA.canBeMergedWith(imageB):
-                group.append(imageB)
-            else:
-                newImages.append(imageB)
-        return group, newImages
-
-    def groupSameImages(images):
-        images = list(images)
-        while images:
-            imageA = images.pop()
-            group, images = extractImageFromGroup(imageA, images)
-            yield imageA, group
-
-    fn = lambda image: (image.filename, image.color, image.repeat)
-    images = [copy(im) for im in images]
-    images.sort(key=fn)
-
-    imageGroups = []
-    for filename, group in groupby(images, key=fn):
-        for pivot, groupedImages in groupSameImages(group):                
-            for im in groupedImages:
-                if im is not pivot:
-                    pivot.mergeWith(im)
-                imageGroups.append(groupedImages)
-    return imageGroups
-
-class SpriteLayout(object):
-    def __init__(self, images):
-        self.size = 0, 0
-        self.images = []
-        self.imageGroups = []
-        self.imagePositions = []
-        self.fillCoef = 0
-        self.extend(images)
-
-    def _initStartupPlacement(self):
-        self.imageGroups = mergeImages(self.images)
-        self.imagePositions = []
-        for group in self.imageGroups:
-            self.imagePositions.append(group[0].getOuterRect())
-
-    def placeImages(self):
-        raise NotImplementedError('this method is shold be overriden in the offsprings')
-
-    def add(self, image):
-        'add a image for appopriate CSS selector into container'
-        if image.repeat != self.repeat:
-            raise ValueError('%s can contain only %s images' % (self.__class__.__name__, self.repeat))
-        self.images.append(image)
-
-    def extend(self, images):
-        for image in images:
-            self.add(image)
-
-    @property
-    def placedImages(self):
-        for i, images in enumerate(self.imageGroups):
-            for im in images:
-                yield im, self.imagePositions[i]
-
-    @property
-    def placedUniqueImages(self):
-        for i, images in enumerate(self.imageGroups):
-            yield images[0], self.imagePositions[i]
-
-    @property
-    def uniqueImagesCount(self):
-        return len(self.imageGroups)
-
-class BoxLayout(SpriteLayout):
-    repeat = 'no-repeat'
-
-    def placeImages(self):    
-        self._initStartupPlacement()
-        alg = SmallestWidthAlgorithm(self.imagePositions)
-        alg.compute()
-        self.size = alg.size
-        self.fillCoef = alg.fillingCoef
+for i, name in enumerate(('Top', 'Right', 'Bottom', 'Left')):
+    setattr(SheetImage, 'margin'+name, property(fget=lambda self: self.margin[i]))
         
-class RepeatXLayout(SpriteLayout):
-    repeat = 'repeat-x'
-
-    def add(self, image):
-        if image.margin[LEFT] != 0 or image.margin[RIGHT] != 0:
-            raise ValueError('x repeated images cannot have left or right margin')
-        super(RepeatXLayout, self).add(image)
-
-    def placeImages(self):
-        self._initStartupPlacement()
-        rects = self.imagePositions
-        width = reduce(lcm, [rect.width for rect in rects])
-        if width > 5000:
-            raise ValueError('generated image will have width %dpx, check inputs' % width)
-        height = 0
-        for rect in rects:
-            rect.topleft = 0, height
-            height += rect.height
-            rect.width = width
-        self.size = width, height
-
-
 class SpriteSheet:
     def __init__(self, name, layout, matteColor=None, drawBackgrounds=True, mode='RGBA'):
         self.name = name
