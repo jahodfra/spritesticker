@@ -1,7 +1,17 @@
+'''
+auxilliary functions for drawing repeated images
+'''
+
 from PIL import Image
 from packing import Rect
 
 def _cropSource(src, pos, destRect):
+    '''
+    crop src rect and destRect to ensure that the source image
+    will not over stretch the destination image
+
+    returns cropped source image and cropped destRect
+    '''
     rect = Rect()
     rect.size = src.size
 
@@ -24,15 +34,27 @@ def _cropSource(src, pos, destRect):
     return src, rect
 
 def _blitSurface(src, pos, dest, destRect):
+    'auxilliary function handling transparency blitting'
     src, rect = _cropSource(src, pos, destRect)
     if src.mode == 'RGBA':
-        #bg = dest.crop(rect.box)
-        #src = Image.composite(src, bg, src).convert('RGB')
         dest.paste(src, rect.topleft, src)
     else:
         dest.paste(src, rect.topleft)
 
 def blitSurface(src, pos, dest, destRect, repeatX, repeatY):
+    '''
+    blit PIL.Image src into PIL.Image dest
+    considering src image shifting and repeat
+
+    attributes:
+        src - source PIL.Image
+        pos - position of source image in the destination image
+        dest - destination PIL.Image
+        destRect - destination area rect
+        repeatX - toggle vertical repeat source image
+        repeatY - toggle horizontal repeat source image
+    '''
+
     left, top = pos
     xCount, yCount = 1, 1
     srcWidth, srcHeight = src.size

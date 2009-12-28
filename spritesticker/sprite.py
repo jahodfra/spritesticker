@@ -1,3 +1,7 @@
+'''
+base module
+'''
+
 import new
 import os
 import tempfile
@@ -11,34 +15,42 @@ from rect import Rect
 
 __all__ = ['SheetImage', 'SpriteSheet', 'CssWriter', 'setPngOptimizer', 'setImageFolder']
 
-pngOptimizer = ''
-imageFolder = ''
+_pngOptimizer = ''
+_imageFolder = ''
 
 def setPngOptimizer(cmd):
     '''
-    e.g pngcrush, pngnq, pngquant
+    set a png optimizer command
+    which is called on generated spritesheets
+
+    e.g. pngcrush, pngnq, pngquant can be used
     setPngOptimizer('pngcrush %s %s')
     '''
-    global pngOptimizer
-    pngOptimizer = cmd
+    global _pngOptimizer
+    _pngOptimizer = cmd
 
 def setImageFolder(path):
-    global imageFolder
-    imageFolder = path
+    '''
+    set a path to image folder
+    simplifies the path definition for SpriteSheets and SheetImages
+    '''
+    global _imageFolder
+    _imageFolder = path
 
 class CssWriter:
     def __init__(self):
         self.selectorToImage = {}
 
-    def extend(self, spriteSheet):
+    def register(self, spriteSheet):
         for image in spriteSheet.transformedImages:
             if image.selector:
-                self.add(image.selector, image)
+                self.selectorToImage[selector] = image
 
-    def add(self, selector, image):
-        self.selectorToImage[selector] = image
-            
     def write(self, filename, pathPrefix=''):
+        '''
+        writes out CSS file
+        pathPrefix - path prefix for spritesheets images in css file
+        '''
         self.pathPrefix = pathPrefix
 
         fout = file(filename, 'w')
@@ -55,18 +67,14 @@ class CssWriter:
 
 class SheetImage:
     '''
+    Object representing properties of image which should be placed into spritesheet
+    also represents properties for css generation
+
     attributes:
-        pos - shifting image in pixels from topleft corner of image (not including margin).
-            Usefull for dynamicly positioning image in div. Used only for CSS generation
-            and background positioning
-        image - image filename or PIL.Image.Image object
-        path - 
-        margin - top, right, bottom, left margin values.
-            it is used for reserving free space around image in sprite sheet.
-            Image size + margin + abs(image position) should be greater than containing div size.
-        color - physical size of image in imagefile
-        background -
-        repeat -
+        path - full path to image file
+        _image - PIL.Image.Image object
+        see SheetImage.__init__
+        ...
     '''
     _repeatDict = {
             'no-repeat': (False, False),
@@ -75,9 +83,17 @@ class SheetImage:
             'repeat': (True, True),
     }
 
-    def __init__(self, image, margin=(0,0,0,0), pos=(0,0), color=None, background=None, repeat='no-repeat'):
+    def __init__(self, image, margin=(0,0,0,0), pos=(0,0), color=None, repeat='no-repeat'):
         '''
-            image can be filename or PIL.Image object
+        image can be filename or PIL.Image object
+        pos - shifting image in pixels from topleft corner of image (not including margin).
+              Usefull for dynamicly positioning image in div. Used only for CSS generation
+              and background positioning
+        image  - image filename on ImagePath or PIL.Image.Image
+        margin - top, right, bottom, left margin values
+                 it is used for reserving free space around image in sprite sheet.
+                 Image size + margin + abs(image position) should be greater than containing div size.
+        color, repeat - counterpart of same CSS property
         '''
         if isinstance(image, PIL.Image.Image):
             self.filename = ''
@@ -85,34 +101,46 @@ class SheetImage:
             self._image = image
         elif isinstance(image, (str, unicode)):
             self.filename = image
-            self.path = os.path.join(imageFolder, self.filename)
+            self.path = os.path.join(_imageFolder, self.filename)
             self._image = PIL.Image.open(self.path)
         else:
             raise ValueError('unsupported value for image')
         self.margin = margin
 
         #CSS properties
-        self.pos = pos
-        self.color = color
-        self.background = background
         self.selector = ''
+        self.color = color
+        self.background = None
+        self.pos = pos
         self.repeat = repeat
 
     def setBackground(self, image):
+        '''
+        set the background
+        image should have SheetImage interface
+        '''
         self.background = image
         return self
 
     def setSelector(self, selector):
+        '''
+        set the css selector
+        selector - str
+        '''
         self.selector = selector
         return self
 
     def canBeMergedWith(self, image):
-        '''transitive, reflexive, symetric relation'''
+        '''
+        two images differing only in pos and margin can be merged together
+        (transitive, reflexive, symetric relation)
+        '''
         return self.filename and self.filename == image.filename and self.repeat == image.repeat and \
         self.color == image.color and self.background is image.background
 
     def mergeWith(self, image):
-        '''two images with same filename can be merged together (one transformed to the other)
+        '''
+        unifies both image margin
         '''
         self.margin = [max(self.margin[i], image.margin[i]) for i in xrange(4)]
         image.margin = self.margin
@@ -148,10 +176,18 @@ class SheetImage:
         blitSurface(self._image, pos, surface, rect, repeatX, repeatY)
 
 for i, name in enumerate(('Top', 'Right', 'Bottom', 'Left')):
-    setattr(SheetImage, 'margin'+name, property(fget=lambda self: self.margin[i]))
+    pname = 'margin' + name
+    getter = lambda self: self.margin[i]
+    setattr(SheetImage, pname, property(fget=getter))
         
 class SpriteSheet:
     def __init__(self, name, layout, matteColor=None, drawBackgrounds=True, mode='RGBA'):
+        '''
+        name - filename without suffix
+        matteColor - bakckground color for generated stylesheet
+        drawBackgrounds - toggle background images drawing
+        mode - is a PIL.Image.mode for generated image ('RGB' or 'RGBA')
+        '''
         self.name = name
         self.mode = mode
         if matteColor:
@@ -162,35 +198,49 @@ class SpriteSheet:
         self.layout = layout
 
     def getSpriteSheetPath(self):
-        return os.path.join(imageFolder, self.getSpriteSheetFilename())
+        return os.path.join(_imageFolder, self.getSpriteSheetFilename())
     
     def getSpriteSheetFilename(self):
         return self.name + '.png'
 
     def write(self):
-        self.layout.placeImages()
-        sheet = PIL.Image.new(self.mode, self.layout.size, self.matteColor)
+        self._placeImages()
+        self._writeSpriteSheet()
+        self._printInfo()
 
+    def _writeSpriteSheet(self):
+        sheet = PIL.Image.new(self.mode, self.layout.size, self.matteColor)
+        self._drawImagesInto(sheet)
+        self._saveFile(sheet)
+
+    def _placeImages()
+        self.layout.placeImages()
+
+    def _drawImagesInto(self, sheet):
         for im, rect in self.layout.placedUniqueImages:
             if not self.drawBackgrounds:
                 im.background = None
             im.drawInto(sheet, rect)
-
-        self._saveFile(sheet)
-        self._printInfo()
-
+        
     def _saveFile(self, sheet):
         path = self.getSpriteSheetPath()
-        if pngOptimizer:
-            tmpfile = tempfile.NamedTemporaryFile(suffix='png').name
-            sheet.save(tmpfile, 'PNG')
-            os.system(pngOptimizer % (tmpfile, path))
-            os.remove(tmpfile)
+        if _pngOptimizer:
+            self_writeOptimizedImage(path)
         else:
             sheet.save(path, optimize=True)
-    
+
+    def _writeOptimizedImage(self, path):
+        tmpfile = tempfile.NamedTemporaryFile(suffix='png').name
+        sheet.save(tmpfile, 'PNG')
+        os.system(_pngOptimizer % (tmpfile, path))
+        os.remove(tmpfile)
+        
     @property
     def transformedImages(self):
+        '''
+        returns all images which are included in generated SpriteSheet
+        with transformed properties
+        '''
         for image, rect in self.layout.placedImages:
             image.setOuterPos(rect.topleft)
             image.filename = self.getSpriteSheetFilename()

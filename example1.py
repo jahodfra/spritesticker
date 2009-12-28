@@ -26,7 +26,7 @@ noRepeat.write()
 verticals.write()
 
 cssWriter = CssWriter()
-cssWriter.extend(noRepeat)
-cssWriter.extend(verticals)
+cssWriter.register(noRepeat)
+cssWriter.register(verticals)
 cssWriter.write(r'test/images.css', pathPrefix='Images/')
 

@@ -1,5 +1,22 @@
 
 class Rect(object):
+    '''
+    reperesents rectangle object
+    and handles settings and recalculating different properties
+
+    >>> r = Rect()
+    >>> r.topleft = 1, 5
+    >>> r.size = 2, 3
+    >>> r.box
+    (1, 5, 3, 8)
+    >>> r.left
+    1
+    >>> r.right
+    3
+    >>> r.height
+    3
+    '''
+
     __slots__ = ['left', 'top', 'width', 'height']
 
     def __init__(self):
@@ -42,4 +59,8 @@ class Rect(object):
 
     @property
     def box(self): return self.topleft + self.bottomright
+
+if __name__ == "__main__":
+    import doctest
+    doctest.testmod()
 
