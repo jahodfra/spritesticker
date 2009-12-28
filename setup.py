@@ -7,6 +7,7 @@ setup(name='spritesticker',
       description='Library for building sprite sheets',
       author='Frantisek Jahoda',
       author_email='jahodfra@gmail.com',
+      license='MIT licence http://www.opensource.org/licenses/mit-license.php',
       url='',
       packages=['spritesticker'],
      )
