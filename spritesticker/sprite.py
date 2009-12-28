@@ -98,18 +98,6 @@ class SheetImage:
         self.selector = ''
         self.repeat = repeat
 
-    @property
-    def leftMargin(self):
-        return margin[self.LEFT]
-    
-    @property
-    def rightMargin(self):
-        return margin[self.RIGHT]
-
-    @property
-    def rightMargin(self):
-        return margin[self.RIGHT]
-
     def setBackground(self, image):
         self.background = image
         return self
