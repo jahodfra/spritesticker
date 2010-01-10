@@ -83,7 +83,7 @@ class SheetImage:
             'repeat': (True, True),
     }
 
-    def __init__(self, image, margin=(0,0,0,0), pos=(0,0), color=None, repeat='no-repeat'):
+    def __init__(self, image, margin=(0,0,0,0), pos=(0,0), color=None, background=None, selector='', repeat='no-repeat'):
         '''
         image can be filename or PIL.Image object
         pos - shifting image in pixels from topleft corner of image (not including margin).
@@ -108,27 +108,11 @@ class SheetImage:
         self.margin = margin
 
         #CSS properties
-        self.selector = ''
+        self.selector = selector
         self.color = color
-        self.background = None
+        self.background = background
         self.pos = pos
         self.repeat = repeat
-
-    def setBackground(self, image):
-        '''
-        set the background
-        image should have SheetImage interface
-        '''
-        self.background = image
-        return self
-
-    def setSelector(self, selector):
-        '''
-        set the css selector
-        selector - str
-        '''
-        self.selector = selector
-        return self
 
     def canBeMergedWith(self, image):
         '''
@@ -155,6 +139,16 @@ class SheetImage:
                   self.marginTop + self._image.size[1] + self.marginBottom)
         return r
 
+    def drawInto(self, surface, rect):
+        self._pasteColor(surface, rect)
+        self._pasteBackground(surface, rect)
+
+        repeatX, repeatY = self._repeatDict[self.repeat]
+        pos = (rect.left + self.marginLeft + self.pos[0],
+               rect.top + self.marginTop + self.pos[1])
+
+        blitSurface(self._image, pos, surface, rect, repeatX, repeatY)
+    
     def _pasteColor(self, sheet, rect):
         if self.color is not None:
             r, g, b = ImageColor.getrgb(self.color)
@@ -165,15 +159,6 @@ class SheetImage:
         if self.background is not None:
             self.background.drawInto(sheet, rect)
 
-    def drawInto(self, surface, rect):
-        self._pasteColor(surface, rect)
-        self._pasteBackground(surface, rect)
-
-        repeatX, repeatY = self._repeatDict[self.repeat]
-        pos = (rect.left + self.marginLeft + self.pos[0],
-               rect.top + self.marginTop + self.pos[1])
-
-        blitSurface(self._image, pos, surface, rect, repeatX, repeatY)
 
 for i, name in enumerate(('Top', 'Right', 'Bottom', 'Left')):
     pname = 'margin' + name
@@ -196,6 +181,17 @@ class SpriteSheet:
             self.matteColor = (255, 255, 255, 0)
         self.drawBackgrounds = drawBackgrounds
         self.layout = layout
+    
+    @property
+    def transformedImages(self):
+        '''
+        returns all images which are included in generated SpriteSheet
+        with transformed properties
+        '''
+        for image, rect in self.layout.placedImages:
+            image.setOuterPos(rect.topleft)
+            image.filename = self.getSpriteSheetFilename()
+            yield image
 
     def getSpriteSheetPath(self):
         return os.path.join(_imageFolder, self.getSpriteSheetFilename())
@@ -235,17 +231,6 @@ class SpriteSheet:
         os.system(_pngOptimizer % (tmpfile, path))
         os.remove(tmpfile)
         
-    @property
-    def transformedImages(self):
-        '''
-        returns all images which are included in generated SpriteSheet
-        with transformed properties
-        '''
-        for image, rect in self.layout.placedImages:
-            image.setOuterPos(rect.topleft)
-            image.filename = self.getSpriteSheetFilename()
-            yield image
-
     def _printInfo(self):
         self._printBaseInfo()
         self._printSizeInfo()
