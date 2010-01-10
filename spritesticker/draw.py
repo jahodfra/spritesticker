@@ -2,8 +2,23 @@
 auxilliary functions for drawing repeated images
 '''
 
-from PIL import Image
+from PIL import Image, ImageColor
 from packing import Rect
+
+def draw(sheet, sheetImage, rect):
+    if sheetImage.color:
+        pasteColor(sheet, sheetImage.color, rect)
+    if sheetImage.background:
+        draw(sheet, sheetImage.background, rect)
+
+    repeatX, repeatY = sheetImage.getRepeats()
+    pos = sheetImage.getInnerPos(rect.topleft)
+    blitSurface(sheetImage.image, pos, sheet, rect, repeatX, repeatY)
+
+def pasteColor(sheet, color, rect):
+    r, g, b = ImageColor.getrgb(color)
+    color = r, g, b, 255
+    sheet.paste(color, rect.box)
 
 def _cropSource(src, pos, destRect):
     '''

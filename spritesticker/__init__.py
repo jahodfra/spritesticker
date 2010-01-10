@@ -60,12 +60,16 @@ EXAMPLE:
 
 '''
 
-from sprite import (SpriteSheet,
-                    SheetImage,
-                    CssWriter,
-                    setPngOptimizer,
-                    setImageFolder)
-
-from layouts import (SpriteLayout,
-                     RepeatXLayout,
-                     BoxLayout)
+from spritesheet import (
+        SpriteSheet,
+        setPngOptimizer)
+from layouts import (
+        SpriteLayout,
+        RepeatXLayout,
+        BoxLayout)
+from sheetimage import (
+        SheetImage,
+        setImageFolder)
+from writers import (
+        CssWriter)
+        
