@@ -44,6 +44,7 @@ class SpriteSheet:
             self.matteColor = (255, 255, 255, 0)
         self.drawBackgrounds = drawBackgrounds
         self.layout = layout
+        self.path = ''
     
     @property
     def transformedImages(self):
@@ -56,13 +57,12 @@ class SpriteSheet:
             image.filename = self.getFilename()
             yield image
 
-    def getPath(self):
-        return os.path.join(sheetimage._imageFolder, self.getFilename())
-    
     def getFilename(self):
         return self.name + '.png'
 
-    def write(self):
+    def write(self, path = ''):
+        path = path or sheetimage._imageFolder
+        self.path = os.path.join(path, self.getFilename())
         self._placeImages()
         self._write()
         self._printInfo()
@@ -82,11 +82,10 @@ class SpriteSheet:
             draw(sheet, im, rect)
         
     def _saveFile(self, sheet):
-        path = self.getPath()
         if _pngOptimizer:
-            self._writeOptimizedImage(sheet, path)
+            self._writeOptimizedImage(sheet, self.path)
         else:
-            sheet.save(path, optimize=True)
+            sheet.save(self.path, optimize=True)
 
     def _writeOptimizedImage(self, sheet, path):
         tmpfile = tempfile.NamedTemporaryFile(suffix='png').name
@@ -107,7 +106,7 @@ class SpriteSheet:
     
     def _printSizeInfo(self):
         placedImages = list(self.layout.placedUniqueImages)
-        newsize = os.path.getsize(self.getPath())
+        newsize = os.path.getsize(self.path)
         if all(image.path != '' for image, rect in placedImages):
             origsize = sum(os.path.getsize(image.path) for image, rect in placedImages)
             sizeCoef = float(newsize) / origsize * 100.0

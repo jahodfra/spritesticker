@@ -49,7 +49,6 @@ class SheetImage:
         if not filename and not image:
             raise ArgumentError('filename or image argument has to be provided')
             
-        self.margin = margin
         if image:
             assert isinstance(image, PIL.Image.Image), 'other image types are not supported'
             self.filename = ''
@@ -58,8 +57,9 @@ class SheetImage:
         elif filename:
             self.filename = filename
             self.path = os.path.join(_imageFolder, self.filename)
-            self.image = PIL.Image.open(self.path)
+            self.image = PIL.Image.open(self.path)            
 
+        self.margin = margin
         #CSS properties
         self.selector = selector
         self.color = color
@@ -101,7 +101,19 @@ class SheetImage:
     def getRepeats(self):
         return self._repeatDict[self.repeat]
 
-for i, name in enumerate(('Top', 'Right', 'Bottom', 'Left')):
-    pname = 'margin' + name
-    getter = lambda self: self.margin[i]
-    setattr(SheetImage, pname, property(fget=getter))
+    @property
+    def marginTop(self): return self.margin[0]
+
+    @property
+    def marginRight(self): return self.margin[1]
+
+    @property
+    def marginBottom(self): return self.margin[2]
+
+    @property
+    def marginLeft(self): return self.margin[3]
+
+#for i, name in enumerate(('Top', 'Right', 'Bottom', 'Left')):
+#    pname = 'margin' + name
+#    getter = lambda self: self.margin[i]
+#    setattr(SheetImage, pname, property(fget=getter))

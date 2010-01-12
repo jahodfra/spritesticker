@@ -63,8 +63,8 @@ class BoxLayout(SpriteLayout):
     repeat = 'no-repeat'
 
     def placeImages(self):    
-        self._initStartupPlacement()
-        alg = SmallestWidthAlgorithm(self.imagePositions)
+        self._initStartupPlacement()        
+        alg = SmallestWidthAlgorithm(self.imagePositions[:])
         alg.compute()
         self.size = alg.size
         self.fillCoef = alg.fillingCoef

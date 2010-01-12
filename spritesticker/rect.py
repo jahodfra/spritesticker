@@ -30,6 +30,9 @@ class Rect(object):
         self.left, self.top = self.top, self.left
         self.width, self.height = self.height, self.width
 
+    def __str__(self):
+        return 'Rect(%d, %d, %d, %d)' % (self.left, self.top, self.width, self.height)
+
     @property
     def area(self):
         return self.width * self.height
