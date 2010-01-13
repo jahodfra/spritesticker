@@ -123,19 +123,16 @@ def mergeImages(images):
     merge images for which can be used one sprite
     into groups
     '''
-    def extractImageFromGroup(imageA, images):
-        '''
-        extract imageA from images
-        returns group and the rest of images
-        '''
-        group = [imageA]
-        newImages = []
-        for imageB in images:
-            if imageA is not imageB and imageA.canBeMergedWith(imageB):
-                group.append(imageB)
-            else:
-                newImages.append(imageB)
-        return group, newImages
+    
+    def sameImagesGroups(images):
+        fn = lambda image: (image.filename, image.color, image.repeat)
+        images.sort(key=fn)
+        for filename, group in groupby(images, key=fn):
+            for pivot, groupedImages in groupSameImages(group):                
+                for im in groupedImages:
+                    if im is not pivot:
+                        mergeImages(pivot, im)
+                    yield groupedImages
 
     def groupSameImages(images):
         images = list(images)
@@ -144,15 +141,34 @@ def mergeImages(images):
             group, images = extractImageFromGroup(imageA, images)
             yield imageA, group
 
-    def sameImagesGroups(images):
-        fn = lambda image: (image.filename, image.color, image.repeat)
-        images.sort(key=fn)
-        for filename, group in groupby(images, key=fn):
-            for pivot, groupedImages in groupSameImages(group):                
-                for im in groupedImages:
-                    if im is not pivot:
-                        pivot.mergeWith(im)
-                    yield groupedImages
+    def extractImageFromGroup(imageA, images):
+        '''
+        extract imageA from images
+        returns group and the rest of images
+        '''
+        group = [imageA]
+        newImages = []
+        for imageB in images:
+            if imageA is not imageB and canBeMerged(imageA, imageB):
+                group.append(imageB)
+            else:
+                newImages.append(imageB)
+        return group, newImages
+
+    def canBeMerged(imageA, imageB):
+        '''
+        two images differing only in pos and margin can be merged together
+        (transitive, reflexive, symetric relation)
+        '''
+        sign = lambda im: (im.filename, im.repeat, im.color, im.background)
+        return imageA.filename and sign(imageA) == sign(imageB)
+
+    def mergeImages(imageA, imageB):
+        '''
+        unifies both image margin
+        '''
+        imageA.margin = [max(imageA.margin[i], imageB.margin[i]) for i in xrange(4)]
+        imageB.margin = imageA.margin
 
     images = [copy(im) for im in images]
     return list(sameImagesGroups(images))

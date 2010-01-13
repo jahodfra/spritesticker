@@ -67,21 +67,6 @@ class SheetImage:
         self.pos = pos
         self.repeat = repeat
 
-    def canBeMergedWith(self, image):
-        '''
-        two images differing only in pos and margin can be merged together
-        (transitive, reflexive, symetric relation)
-        '''
-        return self.filename and self.filename == image.filename and self.repeat == image.repeat and \
-        self.color == image.color and self.background is image.background
-
-    def mergeWith(self, image):
-        '''
-        unifies both image margin
-        '''
-        self.margin = [max(self.margin[i], image.margin[i]) for i in xrange(4)]
-        image.margin = self.margin
-
     def setOuterPos(self, innerPos):
         innerX, innerY = innerPos        
         self.pos = (self.pos[0] - innerX - self.marginLeft,
