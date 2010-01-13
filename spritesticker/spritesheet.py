@@ -4,6 +4,7 @@ base module
 
 import os
 import tempfile
+from copy import copy
 
 import PIL
 from PIL import ImageColor
@@ -53,6 +54,7 @@ class SpriteSheet:
         with transformed properties
         '''
         for image, rect in self.layout.placedImages:
+            image = copy(image)
             image.setOuterPos(rect.topleft)
             image.filename = self.getFilename()
             yield image

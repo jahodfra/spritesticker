@@ -18,15 +18,18 @@ class SpriteLayout(object):
         self.size = 0, 0
         self.images = []
         self.imageGroups = []
-        self.imagePositions = []
         self.fillCoef = 0
         self.extend(images)
 
     def _initStartupPlacement(self):
         self.imageGroups = mergeImages(self.images)
-        self.imagePositions = []
+        imagePositions = []
         for group in self.imageGroups:
-            self.imagePositions.append(group[0].getOuterRect())
+            rect = group[0].getOuterRect()
+            for im in group:
+                im.displayRect = rect
+            imagePositions.append(rect)
+        return imagePositions
 
     def placeImages(self):
         raise NotImplementedError('this method is shold be overriden in the offsprings')
@@ -45,12 +48,12 @@ class SpriteLayout(object):
     def placedImages(self):
         for i, images in enumerate(self.imageGroups):
             for im in images:
-                yield im, self.imagePositions[i]
+                yield im, im.displayRect
 
     @property
     def placedUniqueImages(self):
         for i, images in enumerate(self.imageGroups):
-            yield images[0], self.imagePositions[i]
+            yield images[0], images[0].displayRect
 
     @property
     def uniqueImagesCount(self):
@@ -63,8 +66,8 @@ class BoxLayout(SpriteLayout):
     repeat = 'no-repeat'
 
     def placeImages(self):    
-        self._initStartupPlacement()        
-        alg = SmallestWidthAlgorithm(self.imagePositions[:])
+        rects = self._initStartupPlacement()        
+        alg = SmallestWidthAlgorithm(rects)
         alg.compute()
         self.size = alg.size
         self.fillCoef = alg.fillingCoef
@@ -81,8 +84,7 @@ class RepeatXLayout(SpriteLayout):
         super(RepeatXLayout, self).add(image)
 
     def placeImages(self):
-        self._initStartupPlacement()
-        rects = self.imagePositions
+        rects = self._initStartupPlacement()
         width = reduce(lcm, [rect.width for rect in rects])
         if width > 5000:
             raise ValueError('generated image will have width %dpx, check inputs' % width)
@@ -105,8 +107,7 @@ class RepeatYLayout(SpriteLayout):
         super(RepeatYLayout, self).add(image)
 
     def placeImages(self):
-        self._initStartupPlacement()
-        rects = self.imagePositions
+        rects = self._initStartupPlacement()
         height = reduce(lcm, [rect.height for rect in rects])
         if height > 5000:
             raise ValueError('generated image will have height %dpx, check inputs' % height)

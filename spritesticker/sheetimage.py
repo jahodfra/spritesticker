@@ -113,7 +113,3 @@ class SheetImage:
     @property
     def marginLeft(self): return self.margin[3]
 
-#for i, name in enumerate(('Top', 'Right', 'Bottom', 'Left')):
-#    pname = 'margin' + name
-#    getter = lambda self: self.margin[i]
-#    setattr(SheetImage, pname, property(fget=getter))
