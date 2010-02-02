@@ -28,14 +28,13 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 OTHER DEALINGS IN THE SOFTWARE.
 
 FEATURES
-    * generates CSS
-    * multiple used images are placed into spritesheet only once
-    * tries to pack images to smallest rectangle (only estimation)
-    * program handles images with repeat-x or repeat-y
-    * images can have image background
-    * optional optimalization for IE6 (transparency issues)
-    * on the fly generated PIL.Images can be added into spritesheet
-    * integrated PNG optimizer
+    * generates CSS multiple used images are placed into spritesheet only once
+    * tries to pack images to smallest rectangle (only estimation) program
+    * handles images with repeat-x or repeat-y images can have image background
+    * optional optimalization for IE6 (transparency issues) on the fly
+    * generated PIL.Images can be added into spritesheet integrated PNG
+    * optimizer special referencing of files in css ensure that browser will
+      reload them
 
 TODO:
     * testy
@@ -51,7 +50,6 @@ TODO:
             * bad image type added
         * testPacking (not overlapping, preserving size)
     * enable adding images to corners and centers / 3x3 container
-    * enable generating markup blocks
     * polish documentation + examples
     * design and create html page
 
@@ -69,6 +67,7 @@ from layouts import (
         BoxLayout)
 from sheetimage import (
         SheetImage,
+        CssProp,
         setImageFolder)
 from writers import (
         CssWriter)

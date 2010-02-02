@@ -10,7 +10,7 @@ noRepeat = SpriteSheet(
     layout = BoxLayout([
         SheetImage(
             filename = 'footer-logo.png',
-            selector = '.img-footer-logo',
+            usedInCss = '.img-footer-logo',
             background = SheetImage(
                 filename = 'footer-bg.png',
                 pos = (0, -20),
@@ -27,8 +27,7 @@ verticals = SpriteSheet(
     layout = RepeatXLayout([
         SheetImage(
             filename = 'heading-bg.png',
-            selector = '.img-heading-bg',
-            pos = (0, 15),
+            usedInCss = CssProp('.img-heading-bg', pos=(0, 15)),
             margin = (20, 0, 20, 0),
             color = 'white',
             repeat = 'repeat-x',

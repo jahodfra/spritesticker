@@ -13,6 +13,11 @@ def setImageFolder(path):
     global _imageFolder
     _imageFolder = path
 
+class CssProp:
+    def __init__(self, selector, pos=(0,0)):
+        self.selector = selector
+        self.pos = pos
+
 class SheetImage:
     '''
     Object representing properties of image which should be placed into spritesheet
@@ -31,7 +36,7 @@ class SheetImage:
             'repeat': (True, True),
     }
 
-    def __init__(self, filename=None, image=None, margin=(0,0,0,0), pos=(0,0), color=None, background=None, selector='', repeat='no-repeat'):
+    def __init__(self, filename=None, image=None, margin=(0,0,0,0), pos=(0,0), color=None, background=None, usedInCss=None, repeat='no-repeat'):
         '''
         image can be filename or PIL.Image object
         pos - shifting image in pixels from topleft corner of image (not including margin).
@@ -59,28 +64,39 @@ class SheetImage:
             self.path = os.path.join(_imageFolder, self.filename)
             self.image = PIL.Image.open(self.path)            
 
+        self._setCssProp(usedInCss)
         self.margin = margin
         #CSS properties
-        self.selector = selector
         self.color = color
         self.background = background
-        self.pos = pos
         self.repeat = repeat
 
-    def setOuterPos(self, innerPos):
-        innerX, innerY = innerPos        
-        self.pos = (self.pos[0] - innerX - self.marginLeft,
-                    self.pos[1] - innerY - self.marginTop)
+    def _setCssProp(self, usedIn):
+        if usedIn is None:
+            self.cssProp = []
+            return
+        if isinstance(usedIn, str):
+            self.cssProp = [CssProp(usedIn)]
+        elif isinstance(usedIn, CssProp):
+            self.cssProp = [usedIn]
+        else:
+            if not hasattr(usedIn, '__iter__'):
+                raise ArgumentError('usedIn has invalid type %s, it can be str, CssProp or list of CssProp')
+            self.cssProp = list(usedIn)
 
     def getInnerPos(self, outerPos):
         outerX, outerY = outerPos        
-        return (outerX + self.pos[0] + self.marginLeft,
-                outerY + self.pos[1] + self.marginTop)
+        return (
+            outerX + self.marginLeft,
+            outerY + self.marginTop
+        )
 
     def getOuterRect(self):
         r = Rect()
-        r.size = (self.marginLeft + self.image.size[0] + self.marginRight,
-                  self.marginTop + self.image.size[1] + self.marginBottom)
+        r.size = (
+            self.marginLeft + self.image.size[0] + self.marginRight,
+            self.marginTop + self.image.size[1] + self.marginBottom
+        )
         return r
 
     def getRepeats(self):

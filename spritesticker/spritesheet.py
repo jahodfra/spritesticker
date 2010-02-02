@@ -55,9 +55,8 @@ class SpriteSheet:
         '''
         for image, rect in self.layout.placedImages:
             image = copy(image)
-            image.setOuterPos(rect.topleft)
             image.filename = self.getFilename()
-            yield image
+            yield image, rect.topleft
 
     def getFilename(self):
         return self.name + '.png'
@@ -78,7 +77,7 @@ class SpriteSheet:
         self.layout.placeImages()
 
     def _drawImagesInto(self, sheet):
-        for im, rect in self.layout.placedUniqueImages:
+        for im, rect in self.layout.placedImages:
             if not self.drawBackgrounds:
                 im.background = None
             draw(sheet, im, rect)
@@ -100,14 +99,14 @@ class SpriteSheet:
         self._printSizeInfo()
 
     def _printBaseInfo(self):
-        nImages = self.layout.uniqueImagesCount
+        nImages = self.layout.imagesCount
         print 'generating %s containing %d images' % (self.getFilename(), nImages)
         print '  dimension %d x %dpx' % self.layout.size
         print '  requests saved %d' % (nImages - 1)
         print '  filling coeficient is %.2f%%' % (self.layout.fillCoef * 100.0)
     
     def _printSizeInfo(self):
-        placedImages = list(self.layout.placedUniqueImages)
+        placedImages = list(self.layout.placedImages)
         newsize = os.path.getsize(self.path)
         if all(image.path != '' for image, rect in placedImages):
             origsize = sum(os.path.getsize(image.path) for image, rect in placedImages)

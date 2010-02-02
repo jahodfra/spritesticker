@@ -17,17 +17,14 @@ class SpriteLayout(object):
     def __init__(self, images):
         self.size = 0, 0
         self.images = []
-        self.imageGroups = []
         self.fillCoef = 0
         self.extend(images)
 
     def _initStartupPlacement(self):
-        self.imageGroups = mergeImages(self.images)
         imagePositions = []
-        for group in self.imageGroups:
-            rect = group[0].getOuterRect()
-            for im in group:
-                im.displayRect = rect
+        for im in self.images:
+            rect = im.getOuterRect()
+            im.displayRect = rect
             imagePositions.append(rect)
         return imagePositions
 
@@ -46,18 +43,12 @@ class SpriteLayout(object):
 
     @property
     def placedImages(self):
-        for i, images in enumerate(self.imageGroups):
-            for im in images:
-                yield im, im.displayRect
+        for im in self.images:
+            yield im, im.displayRect
 
     @property
-    def placedUniqueImages(self):
-        for i, images in enumerate(self.imageGroups):
-            yield images[0], images[0].displayRect
-
-    @property
-    def uniqueImagesCount(self):
-        return len(self.imageGroups)
+    def imagesCount(self):
+        return len(self.images)
 
 class BoxLayout(SpriteLayout):
     '''
@@ -117,59 +108,4 @@ class RepeatYLayout(SpriteLayout):
             width += rect.width
             rect.height = height
         self.size = width, height
-
-def mergeImages(images):
-    '''
-    merge images for which can be used one sprite
-    into groups
-    '''
-    
-    def sameImagesGroups(images):
-        fn = lambda image: (image.filename, image.color, image.repeat)
-        images.sort(key=fn)
-        for filename, group in groupby(images, key=fn):
-            for pivot, groupedImages in groupSameImages(group):                
-                for im in groupedImages:
-                    if im is not pivot:
-                        mergeImages(pivot, im)
-                    yield groupedImages
-
-    def groupSameImages(images):
-        images = list(images)
-        while images:
-            imageA = images.pop()
-            group, images = extractImageFromGroup(imageA, images)
-            yield imageA, group
-
-    def extractImageFromGroup(imageA, images):
-        '''
-        extract imageA from images
-        returns group and the rest of images
-        '''
-        group = [imageA]
-        newImages = []
-        for imageB in images:
-            if imageA is not imageB and canBeMerged(imageA, imageB):
-                group.append(imageB)
-            else:
-                newImages.append(imageB)
-        return group, newImages
-
-    def canBeMerged(imageA, imageB):
-        '''
-        two images differing only in pos and margin can be merged together
-        (transitive, reflexive, symetric relation)
-        '''
-        sign = lambda im: (im.filename, im.repeat, im.color, im.background)
-        return imageA.filename and sign(imageA) == sign(imageB)
-
-    def mergeImages(imageA, imageB):
-        '''
-        unifies both image margin
-        '''
-        imageA.margin = [max(imageA.margin[i], imageB.margin[i]) for i in xrange(4)]
-        imageB.margin = imageA.margin
-
-    images = [copy(im) for im in images]
-    return list(sameImagesGroups(images))
 
