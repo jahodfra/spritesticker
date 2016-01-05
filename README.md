@@ -6,7 +6,7 @@ Features
 * vertical (repeat-x) sprite sheets
 * horizontal (repeat-y) sprite sheets
 * sprite can have own image background (for IE 6.0)
-* output PNG files can be compressed trough external program (see 3) e.g. pngcrush
+* output PNG files can be compressed trough external program e.g [pngcrush](http://pmt.sourceforge.net/pngcrush/)
 * multiple used images are placed into spritesheet only once 
 
 Example
